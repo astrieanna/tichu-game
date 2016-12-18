@@ -1,0 +1,153 @@
+<head>
+    <link href="simple.css" type="text/css" rel="stylesheet" />
+</head>
+<body>
+    <div id="other-cards-header"><h3>Other Cards</h3>
+	<div id="other-cards"></div>
+    </div>
+    <div id="player-actions-header"><h3>Player Actions</h3>
+	<div id="player-actions"></div>
+    </div>    
+    <div id="last-play-header"><h3>Last Play</h3>
+	<div id="last-cards"></div>
+    </div>
+    <div id="my-cards-header"><h3>My Cards</h3>
+	<div id="my-cards"></div>
+    </div>
+    <form id="send-cards" class="form-inline">
+	<div class="form-group">
+	    <input id="input-card" type="text" class="form-control" placeholder="Card" autofocus />
+	</div>
+	<div class="form-group">
+	    <input id="input-num-cards" type="text" class="form-control" placeholder="# of cards" autofocus />
+	</div>
+	<button class="btn btn-primary" type="submit">Send</button>
+    </form>
+
+    <div id="log"></div>
+
+    <script src="jquery-2.1.3.js"></script>
+    <script type="text/javascript">
+     function getSortedKeys(obj) {
+	 // TODO: sort by integer value and not string value.
+	 var keys = Object.keys(obj);
+	 return keys.sort();
+     }
+
+     function makeCardString(cardObj) {
+	 var keys = getSortedKeys(cardObj);
+	 var cards = ""
+	 // TODO: figure out better syntax for this so we don't have to
+	 // index all the time.
+	 for (var k in keys) {
+	     cards += (keys[k] + ":" + cardObj[keys[k]] + " ");
+	 }
+	 return cards;
+     }
+
+     // TODO: highlight last action taken.
+     function updatePlayerAction(actions, player) {
+	 console.log("updatePlayerAction");
+	 document.getElementById("player-actions").innerHTML = "";	
+	 var appendMe = actions.join(' | ');
+	 console.log(appendMe);
+	 $('<p>' + appendMe + '</p>').appendTo('#player-actions'); 
+     }
+
+     function WebSocketTest() {
+	 if ("WebSocket" in window) {
+	     $('<p>Websocket connection opened</p>').appendTo('#log');
+	     // Let us open a web socket
+	     var ws = new WebSocket("ws://localhost:9999/echo");
+	     var numPlayers = 0;
+	     var lastPlayerAction = [];
+	     ws.onmessage = function (evt) { 
+		 var received_msg = evt.data;
+		 var received_obj = JSON.parse(received_msg);
+		 console.debug("%o", received_obj);
+		 switch(received_obj.Message) {
+			 case "player_cards":
+			 console.log("Got player_cards");
+			 document.getElementById("my-cards").innerHTML = "";
+			 var cards = makeCardString(received_obj.Cards);
+			 $('<p>' + cards + '</p>').appendTo('#my-cards');
+			 break;
+			 case "last_play":
+			 console.log("Got last_play");
+			 document.getElementById("last-play").innerHTML = "";
+			 var cards = makeCardString(received_obj.Cards);
+			 $('<p>' + cards + '</p>').appendTo('#last-play');
+			 break;
+			 case "played":
+			 console.log("Got played");
+			 var player = received_obj.Player;
+			 var cards = makeCardString(received_obj.Cards);
+			 break;
+			 case "last_action":
+			 console.log("Got last_action");
+			 var player = received_obj.Player;
+			 var actions = received_obj.Action;
+			 updatePlayerAction(actions, player);
+			 break;
+			 case "player_pass":
+			 console.log("Got player_pass");
+			 var player = received_obj.Player;
+			 break;
+			 case "all_pass":
+			 console.log("Got all_pass");
+			 break;
+			 case "won_trick":
+			 console.log("Got won_trick");
+			 var player = received_obj.Player;
+			 break;
+			 case "player_out":
+			 // TODO: figure out how to handle this. We want players to stay out
+			 // and not get their status reset to "None". If it's handled on the
+			 // client side then the client has to remember stuff. If it's handled
+			 // by the server, the server needs to have more state and send different
+			 // types of messages.								
+			 break;
+			 case "start_game":
+			 console.log("Got start_game");
+			 numPlayers = received_obj.Player;
+			 // TODO: remove this.
+			 for (var i = 0; i < numPlayers; i++) {
+			     lastPlayerAction.push("None");
+			 }
+			 break;
+			 default:
+			 console.log("Unknown message type");
+			 $('<p>' + received_msg + '</p>').appendTo('#log');
+		 }
+	     };
+	     ws.onclose = function() { 
+		 $('<p>Websocket connection closed</p>').appendTo('#log');
+	     };
+
+	     <!-- Send a websockets message on click -->
+	     $(function () {
+		 $('#Add').on('click', function () {
+		     ws.send("Message body");
+		 });
+	     });
+
+	     <!-- Make the form work -->
+	     $("#send-cards").on("submit", function(event) {
+		 event.preventDefault();
+		 var card = $("#input-card")[0].value;
+		 var num_cards   = Number($("#input-num-cards")[0].value);
+		 var play = {};
+		 var bogus_player = 0;
+		 play[card] = num_cards;
+		 ws.send(JSON.stringify({ Message : "play_card", Player : bogus_player, Cards : play }));
+		 $("#input-text")[0].value = "";
+	     });   
+	 } else {
+	     // The browser doesn't support WebSocket
+	     alert("WebSocket NOT supported by your Browser!");
+	 }
+     }
+     WebSocketTest();
+     
+    </script>
+</body>
